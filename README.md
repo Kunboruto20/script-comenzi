@@ -56,7 +56,7 @@ pkg update -y && pkg upgrade -y
 pkg install git nodejs jq -y
 
 # Clonează repo și intră în folder
-git clone https://github.com/gyovannyvpn123/script-comenzi.git
+git clone https://github.com/Kunboruto20/script-comenzi.git
 cd script-comenzi
 
 # Dă permisiuni și rulează scriptul de instalare
