@@ -439,6 +439,35 @@ function setupCommands(sock) {
         const s = Object.keys(activeSessions).length;
         const l = Object.keys(activeNameLoops).length;
         await sock.sendMessage(chatId, { text: `📊 Sesiuni: ${s} | Loop-uri: ${l}` });
+      } else if (cmd === "/invite") {
+        if (!chatId.endsWith("@g.us")) {
+          await sock.sendMessage(chatId, { text: "Această comandă funcționează doar în grupuri." });
+          return;
+        }
+        try {
+          const inviteCode = await sock.groupInviteCode(chatId);
+          const inviteLink = `https://chat.whatsapp.com/${inviteCode}`;
+          await sock.sendMessage(chatId, {
+            text: `Accesează acest link pentru a intra în grupul meu WhatsApp:\n${inviteLink}`
+          });
+        } catch (err) {
+          await sock.sendMessage(chatId, { text: "❌ Nu am putut obține linkul de invitație." });
+        }
+      } else if (cmd === "/getoeople") {
+        if (!chatId.endsWith("@g.us")) {
+          await sock.sendMessage(chatId, { text: "Această comandă funcționează doar în grupuri." });
+          return;
+        }
+        try {
+          const metadata = await sock.groupMetadata(chatId);
+          const lines = metadata.participants.map((p, i) => {
+            const name = p.name || p.id.split("@")[0];
+            return `${i + 1}. ${name}`;
+          });
+          await sock.sendMessage(chatId, { text: `👥 Membrii grupului:\n${lines.join("\n")}` });
+        } catch (err) {
+          await sock.sendMessage(chatId, { text: "❌ Nu am putut obține lista participanților." });
+        }
       } else if (cmd === "/stopgroupname") {
         if (activeNameLoops[chatId]) delete activeNameLoops[chatId];
       } else if (cmd.startsWith("/groupname")) {
@@ -483,7 +512,8 @@ function setupCommands(sock) {
               mentions = rem.split(/\s+/)
                 .filter(t => t.startsWith("@"))
                 .map(t => {
-                  let id = t.replace(/^@/, "");
+                  let id =
+ t.replace(/^@/, "");
                   if (!id.includes("@")) id += "@s.whatsapp.net";
                   return id;
                 });
