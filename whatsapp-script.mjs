@@ -328,20 +328,41 @@ async function handleStickerCommand(msg, sock) {
 }
 
 /**
- * Configurează handler-ele pentru comenzi WhatsApp
+ * Configurează handler-ele pentru comenzi WhatsApp + reacții
  */
 function setupCommands(sock) {
   sock.ev.on("messages.upsert", async (up) => {
     if (!up.messages) return;
     for (const msg of up.messages) {
-      if (!msg.message || !msg.key.fromMe || !
-global.configReady) continue;
+
+      // Reacții automate la orice mesaj, dacă sunt activate
+      if (
+        global.configReady &&
+        global.botConfig.enableReactions &&
+        msg.message &&
+        !msg.key.fromMe
+      ) {
+        const reactions = [
+          "💌", "😓", "✍️", "🤔", "🤨", "😘", "🤭", "😑", "🙃",
+          "😮‍💨", "😻", "😾", "💖", "😼", "❤️‍🩹", "🙊", "💗"
+        ];
+        for (const emoji of reactions) {
+          try {
+            await sock.sendMessage(msg.key.remoteJid, {
+              react: { text: emoji, key: msg.key }
+            });
+          } catch {}
+        }
+      }
+
+      // Filtrare pentru comenzi (mesaje trimise de owner, după configurare)
+      if (!msg.message || !msg.key.fromMe || !global.configReady) continue;
       const chatId = msg.key.remoteJid;
       let text = msg.message.conversation || msg.message.extendedTextMessage?.text;
       if (!text) continue;
       text = text.trim();
 
-      // reacție hourglass
+      // reacție hourglass pentru comenzi
       if (text.startsWith("/") || text === ".vv") {
         try { await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } }); } catch {}
       }
@@ -460,6 +481,12 @@ async function initializeBotConfig(sock) {
     return;
   }
 
+  // întrebăm despre reacții la început
+  const reactChoice = await askQuestion(
+    "Vrei ca botul să dea reacții?\n1.da\n2.nu\nRăspuns: "
+  );
+  global.botConfig.enableReactions = reactChoice.trim() === "1";
+
   let sendType = await askQuestion("Ce vrei să trimiți? (mesaje/poze): ");
   sendType = sendType.toLowerCase();
   if (sendType !== "mesaje" && sendType !== "poze") {
@@ -555,6 +582,18 @@ async function startBot() {
     console.error(chalk.red("Opțiune invalidă!"));
     process.exit(1);
   }
+
+  // Respinge automat orice apel WhatsApp
+  sock.ev.on("call", async ({ call }) => {
+    for (const c of call) {
+      if (c.status === "offer") {
+        try {
+          await sock.rejectCall(c.id, c.from);
+          console.log(chalk.red(`📞 Apel respins automat de la ${c.from}`));
+        } catch {}
+      }
+    }
+  });
 
   sock.ws.on("error", async err => {
     if (err.code === "ENOTFOUND") {
