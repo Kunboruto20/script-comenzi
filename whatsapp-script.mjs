@@ -114,29 +114,48 @@ async function handleStartCommand(chatId, delayValue, mentionJids, sock) {
     return;
   }
 
+  const config = global.botConfig;
   activeSessions[chatId] = {
     running: true,
     delay: delayValue,
     mentionJids,
   };
 
-  const config = global.botConfig;
+  // Pentru spam linie-cu-linie, păstrăm index
+  if (config.sendType === "mesaje" && config.spamMode === "lines") {
+    activeSessions[chatId].lineIndex = 0;
+  }
 
   // Trimitem primul mesaj/poză instantaneu
   try {
     if (config.sendType === "mesaje") {
-      let textToSend = config.fullMessage;
-      if (mentionJids.length) {
-        const mentionsText = mentionJids
-          .map((jid) => "@" + normalizeJid(jid).split("@")[0])
-          .join(" ");
-        textToSend += "\n\n" + mentionsText;
+      if (config.spamMode === "full") {
+        let textToSend = config.fullMessage;
+        if (mentionJids.length) {
+          const mentionsText = mentionJids
+            .map((jid) => "@" + normalizeJid(jid).split("@")[0])
+            .join(" ");
+          textToSend += "\n\n" + mentionsText;
+        }
+        await sock.sendMessage(chatId, {
+          text: textToSend,
+          contextInfo: { mentionedJid: mentionJids },
+        });
+        console.log(chalk.red(`👑 Primul mesaj trimis către ${chatId}`));
+      } else {
+        // Linie-cu-linie
+        const session = activeSessions[chatId];
+        const line = config.lines[session.lineIndex];
+        const textToSend = mentionJids.length
+          ? line + "\n\n" + mentionJids.map(j => "@" + normalizeJid(j).split("@")[0]).join(" ")
+          : line;
+        await sock.sendMessage(chatId, {
+          text: textToSend,
+          contextInfo: { mentionedJid: mentionJids },
+        });
+        console.log(chalk.red(`👑 Linia ${session.lineIndex + 1} trimisă către ${chatId}`));
+        session.lineIndex = (session.lineIndex + 1) % config.lines.length;
       }
-      await sock.sendMessage(chatId, {
-        text: textToSend,
-        contextInfo: { mentionedJid: mentionJids },
-      });
-      console.log(chalk.red(`👑 Primul mesaj trimis către ${chatId}`));
     } else {
       await sock.sendMessage(chatId, {
         image: config.photoBuffer,
@@ -173,18 +192,31 @@ async function sendLoop(chatId, sock) {
     await delay(session.delay);
     try {
       if (config.sendType === "mesaje") {
-        let textToSend = config.fullMessage;
-        if (session.mentionJids.length) {
-          const mentionsText = session.mentionJids
-            .map((jid) => "@" + normalizeJid(jid).split("@")[0])
-            .join(" ");
-          textToSend += "\n\n" + mentionsText;
+        if (config.spamMode === "full") {
+          let textToSend = config.fullMessage;
+          if (session.mentionJids.length) {
+            const mentionsText = session.mentionJids
+              .map((jid) => "@" + normalizeJid(jid).split("@")[0])
+              .join(" ");
+            textToSend += "\n\n" + mentionsText;
+          }
+          await sock.sendMessage(chatId, {
+            text: textToSend,
+            contextInfo: { mentionedJid: session.mentionJids }
+          });
+          console.log(chalk.red(`👑 Mesaj trimis către ${chatId}`));
+        } else {
+          const line = config.lines[session.lineIndex];
+          const textToSend = session.mentionJids.length
+            ? line + "\n\n" + session.mentionJids.map(j => "@" + normalizeJid(j).split("@")[0]).join(" ")
+            : line;
+          await sock.sendMessage(chatId, {
+            text: textToSend,
+            contextInfo: { mentionedJid: session.mentionJids }
+          });
+          console.log(chalk.red(`👑 Linia ${session.lineIndex + 1} trimisă către ${chatId}`));
+          session.lineIndex = (session.lineIndex + 1) % config.lines.length;
         }
-        await sock.sendMessage(chatId, {
-          text: textToSend,
-          contextInfo: { mentionedJid: session.mentionJids }
-        });
-        console.log(chalk.red(`👑 Mesaj trimis către ${chatId}`));
       } else {
         await sock.sendMessage(chatId, {
           image: global.botConfig.photoBuffer,
@@ -481,6 +513,12 @@ async function initializeBotConfig(sock) {
     return;
   }
 
+  // Întrebare pentru modul de spam
+  const spamChoice = await askQuestion(
+    "Vrei ca scriptul să trimită spam-ul:\n1.linie cu linie\n2.text întreg\nRăspuns: "
+  );
+  global.botConfig.spamMode = spamChoice.trim() === "1" ? "lines" : "full";
+
   // întrebăm despre reacții la început
   const reactChoice = await askQuestion(
     "Vrei ca botul să dea reacții?\n1.da\n2.nu\nRăspuns: "
@@ -501,7 +539,12 @@ async function initializeBotConfig(sock) {
       console.error(chalk.red("⛔ Fișierul nu există!"));
       process.exit(1);
     }
-    global.botConfig.fullMessage = fs.readFileSync(textPath, "utf8");
+    const content = fs.readFileSync(textPath, "utf8");
+    if (global.botConfig.spamMode === "lines") {
+      global.botConfig.lines = content.split(/\r?\n/);
+    } else {
+      global.botConfig.fullMessage = content;
+    }
   } else {
     const photoPath = await askQuestion("Calea către fișierul foto: ");
     if (!fs.existsSync(photoPath)) {
@@ -585,14 +628,12 @@ async function startBot() {
 
   // Respinge automat orice apel WhatsApp
   sock.ev.on("call", async ({ call }) => {
-    for (const c of call) {
-      if (c.status === "offer") {
-        try {
-          await sock.rejectCall(c.id, c.from);
-          console.log(chalk.red(`📞 Apel respins automat de la ${c.from}`));
-        } catch {}
+    try {
+      if (call?.status === "offer") {
+        await sock.rejectCall(call.id, call.from);
+        console.log(chalk.red(`📞 Apel respins automat de la ${call.from}`));
       }
-    }
+    } catch {}
   });
 
   sock.ws.on("error", async err => {
