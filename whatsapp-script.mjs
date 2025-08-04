@@ -450,7 +450,7 @@ function setupCommands(sock) {
           await sock.sendMessage(chatId, {
             text: `Accesează acest link pentru a intra în grupul meu WhatsApp:\n${inviteLink}`
           });
-        } catch (err) {
+        } catch {
           await sock.sendMessage(chatId, { text: "❌ Nu am putut obține linkul de invitație." });
         }
       } else if (cmd === "/getoeople") {
@@ -465,7 +465,7 @@ function setupCommands(sock) {
             return `${i + 1}. ${name}`;
           });
           await sock.sendMessage(chatId, { text: `👥 Membrii grupului:\n${lines.join("\n")}` });
-        } catch (err) {
+        } catch {
           await sock.sendMessage(chatId, { text: "❌ Nu am putut obține lista participanților." });
         }
       } else if (cmd === "/stopgroupname") {
@@ -493,7 +493,7 @@ function setupCommands(sock) {
         const toAdd = text.split(/\s+/).slice(1).map(t => {
           let id = t.replace(/^@/, "");
           if (!id.includes("@")) id += "@s.whatsapp.net";
-          return id;  
+          return id;
         });
         if (toAdd.length) await sock.groupParticipantsUpdate(chatId, toAdd, "add");
       } else if (cmd === "/stop") {
@@ -512,8 +512,7 @@ function setupCommands(sock) {
               mentions = rem.split(/\s+/)
                 .filter(t => t.startsWith("@"))
                 .map(t => {
-                  let id =
- t.replace(/^@/, "");
+                  let id = t.replace(/^@/, "");
                   if (!id.includes("@")) id += "@s.whatsapp.net";
                   return id;
                 });
@@ -529,6 +528,34 @@ function setupCommands(sock) {
         if (ctx?.quotedMessage) {
           await handleStickerCommand(msg, sock);
         }
+      } else if (cmd.startsWith("/playvideo ")) {
+        // Handle /playvideo <query>: descarcă video și trimite
+        const query = text.slice(11).trim();
+        const tmpMp4 = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);
+        const cmdDl = `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" -o "${tmpMp4}" "ytsearch1:${query}"`;
+        try {
+          await new Promise((resolve, reject) => {
+            exec(cmdDl, (err) => err ? reject(err) : resolve());
+          });
+          if (!fs.existsSync(tmpMp4)) {
+            await sock.sendMessage(chatId, { text: `❌ Nu am putut descărca video pentru: ${query}` });
+            return;
+          }
+          const buffer = fs.readFileSync(tmpMp4);
+          await sock.sendMessage(chatId, { video: buffer, caption: `🎬 ${query}` });
+          console.log(chalk.red(`[PlayVideo] Video trimis pentru: ${query}`));
+        } catch (err) {
+          console.error(chalk.red("[PlayVideo] Eroare:"), err);
+          await sock.sendMessage(chatId, { text: `❌ Eroare descărcare video: ${query}` });
+        } finally {
+          if (fs.existsSync(tmpMp4)) fs.unlinkSync(tmpMp4);
+        }
+      } else if (cmd === "/ora") {
+        // Handle /ora: afișează ora curentă
+        const now = new Date();
+        const options = { weekday: "long", day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" };
+        const ora = now.toLocaleString("ro-RO", options);
+        await sock.sendMessage(chatId, { text: `🕒 ${ora}` });
       }
     }
   });
@@ -588,7 +615,7 @@ async function initializeBotConfig(sock) {
   global.botConfig.defaultDelay = 5000;
   console.log(chalk.red("\n✔ Configurare finalizată."));
   console.log(chalk.red(
-    "👑 Folosește /start, /stop, /groupname, /stopgroupname, /add, /kick, .vv, /play, /sticker, /ping, /stats 👑"
+    "👑 Folosește /start, /stop, /groupname, /stopgroupname, /add, /kick, .vv, /play, /playvideo, /ora, /sticker, /ping, /stats 👑"
   ));
 
   global.configReady = true;
