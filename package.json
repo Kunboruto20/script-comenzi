@@ -2,10 +2,10 @@
   "name": "boruto-commands-bot",
   "version": "3.0.5",
   "description": "Powerful WhatsApp bot built with Baileys for sending messages via commands.",
-  "main": "whatsapp-script.mjs",
+  "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node whatsapp-script.mjs"
+    "start": "node index.js"
   },
   "author": "Gyovanny Srg",
   "license": "MIT",
