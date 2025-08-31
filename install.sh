@@ -30,7 +30,7 @@ pkg install yt-dlp -y
 # INSTALARE DEPENDINȚE NPM
 echo -e "\nInstalez modulele necesare pentru bot..."
 echo -e "📜 LICENSE: Gyovanny Srg © 2024 — Cod protejat de drepturi de autor"
-npm install @whiskeysockets/baileys qrcode-terminal pino chalk fluent-ffmpeg
+npm install @whiskeysockets/baileys@latest qrcode-terminal pino chalk fluent-ffmpeg
 
 # CONFIRMARE FINALĂ
 echo -e "\n✅ Toate dependințele au fost instalate cu succes!"
