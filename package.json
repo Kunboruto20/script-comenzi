@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node Whatsapp-script.mjs"
+    "start": "node whatsapp-script.mjs"
   },
   "author": "Gyovanny Srg",
   "license": "MIT",
